@@ -34,7 +34,7 @@ const generateToken = (userId) => {
 // Signup Route
 app.post('/signup', async (req, res) => {
     try {
-        const { email, password, confirmPassword } = req.body;
+        const { name, email, password, confirmPassword } = req.body;
 
         // Check if required fields are present
         if (!email || !password || !confirmPassword) {
@@ -53,7 +53,7 @@ app.post('/signup', async (req, res) => {
         }
 
         // Create new user
-        const user = new User({ email, password });
+        const user = new User({ name, email, password });
         await user.save();
 
         // Generate token
@@ -73,13 +73,13 @@ app.post('/login', async (req, res) => {
         // Find user by email
         const user = await User.findOne({ email });
         if (!user) {
-            return res.status(400).send({ message: 'Invalid credentials' });
+            return res.status(400).send({ message: 'User not found' });
         }
 
         // Check password
         const isMatch = await user.comparePassword(password);
         if (!isMatch) {
-            return res.status(400).send({ message: 'Invalid credentials' });
+            return res.status(400).send({ message: 'Invalid password' });
         }
 
         // Generate token
