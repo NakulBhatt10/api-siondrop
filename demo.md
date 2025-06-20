@@ -14,6 +14,7 @@ Payload -
   "confirmPassword" : "Hello@123"
 }
 ```
+output
 
 # Login - a user
 
@@ -27,6 +28,15 @@ Payload -
   "confirmPassword" : "Hello@123"
 }
 ```
+Output-
+
+(mardown format)
+
+book-taxi-now
+
+book-auto-now
+
+booking-history
 
 
 

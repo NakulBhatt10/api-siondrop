@@ -4,9 +4,11 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 require('dotenv').config();
+const authenticate = require('./middleware/auth.js');
 
-const User = require('./user.js');
-const Booking = require('./booking');
+
+const User = require('./models/user.js');
+const Booking = require('./models/bookings.js');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -91,18 +93,75 @@ app.post('/login', async (req, res) => {
     }
 });
 
-// Book Now Route (Protected)
-app.post('/book-now', async (req, res) => {
+
+async function makeBooking(req, res, vehicleType) {
+    const { taxiId, time } = req.body;
+    if (!taxiId || !time) {
+        return res.status(400).json({ message: 'taxiId and time are required' });
+    }
+
+    const capacity = vehicleType === 'auto' ? 3 : 4;
+    const taken = await Booking.countDocuments({ taxiId });
+    if (taken >= capacity) {
+        return res.status(400).json({
+            message: `Sorry—this ${vehicleType} is full.`
+        });
+    }
+
+    // 1) Insert your seat
+    const seat = new Booking({
+        taxiId,
+        vehicleType,
+        users: [{
+            userId: req.user._id,
+            name: req.user.name,
+            email: req.user.email
+        }],
+        time: new Date(time),
+        maxCapacity: capacity
+    });
+    await seat.save();
+
+    // 2) Fetch all seats, flatten users
+    const seats = await Booking.find({ taxiId }).select('users -_id').lean();
+    const allRiders = seats.flatMap(s => s.users);
+
+    // 3) Return the new seat plus full rider list
+    const result = seat.toObject();
+    result.users = allRiders;
+
+    res.status(201).json({ booking: result });
+}
+
+// Taxi route
+app.post(
+    '/book-taxi-now',
+    authenticate,
+    (req, res) => makeBooking(req, res, 'taxi')
+);
+
+// Auto route
+app.post(
+    '/book-auto-now',
+    authenticate,
+    (req, res) => makeBooking(req, res, 'auto')
+);
+
+app.get('/booking-history', authenticate, async (req, res) => {
     try {
-        const { userId, date, details } = req.body;
+        // Find all “seat” docs where this user is in the users array
+        const bookings = await Booking.find({ 'users.userId': req.user._id })
+            .sort({ createdAt: -1 });  // most recent first
 
-        // Create new booking
-        const booking = new Booking({ user: userId, date, details });
-        await booking.save();
-
-        res.status(201).send({ booking });
-    } catch (error) {
-        res.status(500).send({ message: 'Error creating booking', error });
+        res.json({
+            count: bookings.length,
+            bookings
+        });
+    } catch (err) {
+        console.error(err);
+        res
+            .status(500)
+            .json({ message: 'Could not fetch booking history', error: err.message });
     }
 });
 
