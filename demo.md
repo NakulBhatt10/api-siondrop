@@ -38,7 +38,11 @@ book-auto-now
 
 booking-history
 
+current-booking
 
+cancel-booking
+
+current-user-in-slot
 
 
 

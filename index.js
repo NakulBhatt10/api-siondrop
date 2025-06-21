@@ -165,7 +165,85 @@ app.get('/booking-history', authenticate, async (req, res) => {
     }
 });
 
+app.get('/current-booking', authenticate, async (req, res) => {
+    try {
+        // latest seat where this user is already on board
+        const booking = await Booking
+            .findOne({ 'users.userId': req.user._id })
+            .sort({ createdAt: -1 })
+            .lean();
+
+        if (!booking) {
+            return res.status(404).json({ message: 'No active booking' });
+        }
+
+        // you might choose to hide internal Mongo fields here
+        res.json({ booking });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({
+            message: 'Could not fetch current booking',
+            error: err.message
+        });
+    }
+});
+
+app.post(
+    '/cancel-booking',
+    authenticate,
+    async (req, res) => {
+        const { taxiId } = req.body;
+        if (!taxiId) {
+            return res.status(400).json({ message: 'taxiId is required' });
+        }
+
+        try {
+            // delete only this user’s seat for that taxiId
+            const removed = await Booking.findOneAndDelete({
+                taxiId,
+                'users.userId': req.user._id
+            });
+
+            if (!removed) {
+                return res
+                    .status(404)
+                    .json({ message: 'No booking found to cancel' });
+            }
+
+            // fetch remaining riders for that slot
+            const seats = await Booking
+                .find({ taxiId })
+                .select('users -_id')
+                .lean();
+            const allRiders = seats.flatMap(s => s.users);
+
+            res.json({ taxiId, users: allRiders });
+        } catch (err) {
+            console.error('Cancel error:', err);
+            res
+                .status(500)
+                .json({ message: 'Could not cancel booking', error: err.message });
+        }
+    }
+);
+
 // Start the server
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
+
+// GET /profile
+app.get(
+    '/profile',
+    authenticate,
+    async (req, res) => {
+        // req.user was loaded by authenticate()
+        res.json({
+            user: {
+                id: req.user._id,
+                name: req.user.name,
+                email: req.user.email
+            }
+        });
+    }
+);
