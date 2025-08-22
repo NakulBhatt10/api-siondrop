@@ -147,23 +147,23 @@ app.post(
     (req, res) => makeBooking(req, res, 'auto')
 );
 
-app.get('/booking-history', authenticate, async (req, res) => {
-    try {
-        // Find all “seat” docs where this user is in the users array
-        const bookings = await Booking.find({ 'users.userId': req.user._id })
-            .sort({ createdAt: -1 });  // most recent first
+// app.get('/booking-history', authenticate, async (req, res) => {
+//     try {
+//         // Find all “seat” docs where this user is in the users array
+//         const bookings = await Booking.find({ 'users.userId': req.user._id })
+//             .sort({ createdAt: -1 });  // most recent first
 
-        res.json({
-            count: bookings.length,
-            bookings
-        });
-    } catch (err) {
-        console.error(err);
-        res
-            .status(500)
-            .json({ message: 'Could not fetch booking history', error: err.message });
-    }
-});
+//         res.json({
+//             count: bookings.length,
+//             bookings
+//         });
+//     } catch (err) {
+//         console.error(err);
+//         res
+//             .status(500)
+//             .json({ message: 'Could not fetch booking history', error: err.message });
+//     }
+// });
 
 app.get('/current-booking', authenticate, async (req, res) => {
     try {
@@ -226,6 +226,60 @@ app.post(
         }
     }
 );
+
+/**
+ * POST /booking-history
+ * Body: { email: string }
+ *
+ * Returns all past rides that this email was on,
+ * with date/time, vehicleType, and total passenger count.
+ */
+app.post(
+    '/current-booking',
+    authenticate,            // optional—remove if you don't need auth
+    async (req, res) => {
+        const { email } = req.body;
+        if (!email) {
+            return res
+                .status(400)
+                .json({ message: 'Missing required field: email' });
+        }
+
+        try {
+            // 1) find all “seat” docs where this user email is in the users array
+            const seats = await Booking.find({ 'users.email': email })
+                .sort({ time: -1 })   // most recent first
+                .lean();
+
+            // 2) build the history array
+            const history = await Promise.all(
+                seats.map(async (seat) => {
+                    // count how many seats (users) booked this same taxiId
+                    const totalPassengers = await Booking.countDocuments({
+                        taxiId: seat.taxiId,
+                    });
+
+                    return {
+                        dateTime: seat.time,
+                        rideType: seat.vehicleType,
+                        totalPassengers,
+                    };
+                })
+            );
+
+            res.json({
+                count: history.length,
+                history,
+            });
+        } catch (err) {
+            console.error('Booking-history error', err);
+            res
+                .status(500)
+                .json({ message: 'Could not fetch booking history', error: err.message });
+        }
+    }
+);
+
 
 // Start the server
 app.listen(PORT, () => {
