@@ -283,7 +283,7 @@ app.post(
 
 // Start the server
 app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
+    console.log(`Server is running on https://api-siondrop.onrender.com:${PORT}`);
 });
 
 // GET /profile
